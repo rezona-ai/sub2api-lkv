@@ -1,0 +1,15 @@
+# The application. Applied by .github/workflows/gke-deploy.yml, which replaces
+# SUB2API_IMAGE with the image it just built. To apply by hand:
+#   kubectl kustomize infra/gke/k8s/app | sed "s|SUB2API_IMAGE|<image>|" | kubectl apply -f -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ns-sub2api
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - gateway.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: sub2api
+    includeSelectors: true

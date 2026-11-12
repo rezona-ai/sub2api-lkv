@@ -1,0 +1,64 @@
+# Public entry: a global external Application Load Balancer on the reserved
+# static IP "lkv-sub2api-ip". HTTP works by IP; HTTPS serves the Google-managed
+# certificate for bigaccount.cc from the certificate map "lkv-sub2api".
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: sub2api
+  annotations:
+    networking.gke.io/certmap: lkv-sub2api
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  addresses:
+    - type: NamedAddress
+      value: lkv-sub2api-ip
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+    - name: https
+      protocol: HTTPS
+      port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: sub2api
+spec:
+  parentRefs:
+    - name: sub2api
+  rules:
+    - backendRefs:
+        - name: sub2api
+          port: 80
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: sub2api
+spec:
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: /health
+  targetRef:
+    group: ""
+    kind: Service
+    name: sub2api
+---
+# Long timeout so streaming (SSE) completions are not cut by the load balancer.
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: sub2api
+spec:
+  default:
+    timeoutSec: 3600
+    connectionDraining:
+      drainingTimeoutSec: 30
+  targetRef:
+    group: ""
+    kind: Service
+    name: sub2api

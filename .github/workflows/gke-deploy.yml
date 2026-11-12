@@ -1,0 +1,113 @@
+# Fork-only workflow (not part of upstream sub2api): build a chosen branch and
+# deploy it to the lkv-cluster GKE cluster. Manual trigger only.
+# Everything it needs lives in infra/gke; see infra/gke/README.md.
+name: GKE Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or commit SHA to build and deploy'
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation
+
+concurrency:
+  group: gke-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: gtxy-rzn-infra
+  REGION: us-east1
+  CLUSTER: lkv-cluster
+  NAMESPACE: ns-sub2api
+  IMAGE: us-east1-docker.pkg.dev/gtxy-rzn-infra/sub2api/sub2api
+  WIF_PROVIDER: projects/485851857160/locations/global/workloadIdentityPools/lkv-github/providers/github
+  DEPLOY_SA: sub2api-deploy@gtxy-rzn-infra.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Application source: the ref being deployed (may be a pure upstream branch).
+      - name: Checkout source (${{ inputs.ref }})
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          path: src
+
+      # Deployment manifests: always from the ref this workflow runs on, so a
+      # branch without infra/gke can still be deployed.
+      - name: Checkout deploy manifests
+        uses: actions/checkout@v6
+        with:
+          path: ops
+          sparse-checkout: infra/gke
+
+      - name: Resolve image tag
+        id: meta
+        working-directory: src
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}:${sha}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: src
+          file: src/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          # The upstream Dockerfile defaults to China mirrors; use the official
+          # ones on GitHub runners without touching the file.
+          build-args: |
+            GOPROXY=https://proxy.golang.org,direct
+            GOSUMDB=sum.golang.org
+            COMMIT=${{ steps.meta.outputs.sha }}
+            DATE=${{ steps.meta.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
+          use_dns_based_endpoint: true
+
+      - name: Deploy
+        env:
+          DEPLOY_IMAGE: ${{ steps.meta.outputs.image }}
+        run: |
+          kubectl kustomize ops/infra/gke/k8s/app \
+            | sed "s|SUB2API_IMAGE|${DEPLOY_IMAGE}|" \
+            | kubectl apply -f -
+          kubectl -n "${NAMESPACE}" rollout status deployment/sub2api --timeout=15m
+
+      - name: Show result
+        if: always()
+        run: |
+          kubectl -n "${NAMESPACE}" get deployment,pods,gateway -o wide || true
+          kubectl -n "${NAMESPACE}" logs deployment/sub2api --tail=50 || true

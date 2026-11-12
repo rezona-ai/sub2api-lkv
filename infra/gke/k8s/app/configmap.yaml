@@ -1,0 +1,23 @@
+# Non-secret settings. Secrets (DB/Redis hosts and passwords, JWT, TOTP, admin
+# login) live in the Secret "sub2api-env", created by bootstrap.sh.
+# Any variable from deploy/.env.example can be added here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sub2api-config
+data:
+  AUTO_SETUP: "true"
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: "8080"
+  SERVER_MODE: "release"
+  RUN_MODE: "standard"
+  TZ: "Asia/Shanghai"
+  DATABASE_PORT: "5432"
+  DATABASE_SSLMODE: "require"
+  DATABASE_MAX_OPEN_CONNS: "50"
+  DATABASE_MAX_IDLE_CONNS: "10"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_ENABLE_TLS: "false"
+  # Logs go to stdout (Cloud Logging); the data dir is ephemeral.
+  LOG_OUTPUT_TO_FILE: "false"

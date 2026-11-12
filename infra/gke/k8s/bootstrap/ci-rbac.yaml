@@ -1,0 +1,37 @@
+# What the GitHub Actions deploy identity may do: manage the app's own objects
+# in ns-sub2api, nothing cluster-wide and no access to Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sub2api-deployer
+  namespace: ns-sub2api
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["networking.gke.io"]
+    resources: ["healthcheckpolicies", "gcpbackendpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sub2api-deployer
+  namespace: ns-sub2api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sub2api-deployer
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: sub2api-deploy@gtxy-rzn-infra.iam.gserviceaccount.com

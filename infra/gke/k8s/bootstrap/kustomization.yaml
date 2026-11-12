@@ -1,0 +1,6 @@
+# Cluster-admin, one-time objects. Applied by bootstrap.sh (stage k8s), not by CI.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - ci-rbac.yaml
