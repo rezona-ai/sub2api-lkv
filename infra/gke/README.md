@@ -57,7 +57,8 @@ kubectl -n ns-sub2api rollout undo deployment/sub2api
 gcloud compute addresses describe lkv-sub2api-ip --global --format='value(address)'
 ```
 
-- `http://<ip>/` works immediately.
+- `https://bigaccount.cc/` is the entry point. Plain HTTP (by domain or by IP)
+  answers with a 301 redirect to HTTPS.
 - First admin login: e-mail is `ADMIN_EMAIL` in `env.sh`, password:
   `gcloud secrets versions access latest --secret sub2api-admin-password`.
   The admin is only created when the users table is empty; change the password
@@ -65,7 +66,7 @@ gcloud compute addresses describe lkv-sub2api-ip --global --format='value(addres
 
 ### Domain (Cloudflare)
 
-Once `bigaccount.cc` is registered, add in Cloudflare DNS:
+Records in Cloudflare DNS (already in place for `bigaccount.cc`):
 
 1. The certificate validation record printed by `./bootstrap.sh cert`
    (`CNAME _acme-challenge.bigaccount.cc → ….authorize.certificatemanager.goog.`),
@@ -77,9 +78,8 @@ The certificate becomes `ACTIVE` some minutes after record 1 resolves; check wit
 are proxied through Cloudflare (orange cloud), set SSL/TLS mode to
 **Full (strict)**.
 
-After HTTPS works, consider redirecting HTTP by replacing the `http` listener's
-route with a redirect `HTTPRoute`, and set `SERVER_FRONTEND_URL` in
-`k8s/app/configmap.yaml`.
+Optionally set `SERVER_FRONTEND_URL` in `k8s/app/configmap.yaml` so links in
+e-mails use the domain.
 
 ## Operations
 
