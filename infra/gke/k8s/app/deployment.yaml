@@ -15,13 +15,12 @@ spec:
     spec:
       # preStop (60s) + the app's own 5s shutdown, with headroom.
       terminationGracePeriodSeconds: 90
-      # Replicas must sit in different zones (Autopilot adds a node if needed), so
-      # a node or zone loss leaves one serving. Counted per revision, so a
-      # rollout is not blocked by the pods it is replacing.
+      # Prefer (not require) replicas in different zones and on different nodes.
+      # Counted per revision, so the pods being replaced in a rollout are ignored.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: sub2api
