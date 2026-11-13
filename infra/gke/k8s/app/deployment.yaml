@@ -15,20 +15,26 @@ spec:
     spec:
       # preStop (60s) + the app's own 5s shutdown, with headroom.
       terminationGracePeriodSeconds: 90
-      # Prefer one replica per zone so a zone or node loss leaves one serving.
+      # Replicas must sit in different zones (Autopilot adds a node if needed), so
+      # a node or zone loss leaves one serving. Counted per revision, so a
+      # rollout is not blocked by the pods it is replacing.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: sub2api
+          matchLabelKeys:
+            - pod-template-hash
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: sub2api
+          matchLabelKeys:
+            - pod-template-hash
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
