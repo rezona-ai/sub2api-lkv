@@ -3,7 +3,8 @@ kind: Deployment
 metadata:
   name: sub2api
 spec:
-  replicas: 1
+  # No "replicas" here: the HorizontalPodAutoscaler (autoscaling.yaml) owns it,
+  # and setting it would reset the count on every deploy.
   revisionHistoryLimit: 5
   strategy:
     type: RollingUpdate
@@ -12,7 +13,22 @@ spec:
       maxUnavailable: 0
   template:
     spec:
-      terminationGracePeriodSeconds: 30
+      # preStop (60s) + the app's own 5s shutdown, with headroom.
+      terminationGracePeriodSeconds: 90
+      # Prefer one replica per zone so a zone or node loss leaves one serving.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: sub2api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: sub2api
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -42,6 +58,14 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          # The app stops 5s after SIGTERM (fixed upstream), which would cut
+          # streaming responses. Delay SIGTERM instead: the pod is removed from
+          # the load balancer as soon as it starts terminating, so it gets no
+          # new requests while in-flight ones have this long to finish.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 60
           # The listener only opens after migrations finish, which can take minutes.
           startupProbe:
             httpGet:

@@ -14,8 +14,9 @@ data:
   TZ: "Asia/Shanghai"
   DATABASE_PORT: "5432"
   DATABASE_SSLMODE: "require"
-  DATABASE_MAX_OPEN_CONNS: "50"
-  DATABASE_MAX_IDLE_CONNS: "10"
+  # Per pod. 4 pods (HPA max) x 20 = 80, under the Cloud SQL limit of 100.
+  DATABASE_MAX_OPEN_CONNS: "20"
+  DATABASE_MAX_IDLE_CONNS: "5"
   REDIS_PORT: "6379"
   REDIS_DB: "0"
   REDIS_ENABLE_TLS: "false"

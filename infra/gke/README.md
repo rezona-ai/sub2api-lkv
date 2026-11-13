@@ -15,7 +15,7 @@ No upstream file is modified.
 | Project / region | `gtxy-rzn-infra` / `us-east1` |
 | Network | VPC `lkv-vpc`, subnet `lkv-us-east1`, Cloud NAT `lkv-nat` with fixed egress IP `lkv-nat-ip` |
 | Cluster | GKE Autopilot `lkv-cluster` (private nodes, DNS-based control-plane endpoint) |
-| App | Deployment `sub2api` in namespace `ns-sub2api`, 1 replica |
+| App | Deployment `sub2api` in namespace `ns-sub2api`, 2–4 replicas (HPA on CPU), PodDisruptionBudget, spread across zones |
 | PostgreSQL | Cloud SQL `sub2api-pg` — PG 18, `db-custom-1-3840`, 10 GB SSD, private IP only |
 | Redis | Memorystore `sub2api-redis` — Basic, 1 GB, Redis 7.2, AUTH on |
 | Images | Artifact Registry `us-east1-docker.pkg.dev/gtxy-rzn-infra/sub2api/sub2api` |
@@ -101,9 +101,13 @@ kubectl -n ns-sub2api logs deploy/sub2api -f
 - **Resize the database / Redis**: edit `env.sh` for the record, then
   `gcloud sql instances patch sub2api-pg --tier <tier>` (short restart) or
   `gcloud redis instances update sub2api-redis --region us-east1 --size <GB>`.
-- **Scale out**: raise `replicas` in `k8s/app/deployment.yaml`. Background jobs
-  use a shared leader lock, but keep `replicas × DATABASE_MAX_OPEN_CONNS` below
-  the Cloud SQL connection limit (100 on the current tier).
+- **Scaling**: `k8s/app/autoscaling.yaml` (HPA 2–4 replicas at 70% CPU, PDB).
+  Background jobs use a shared leader lock, so replicas are safe. Keep
+  `maxReplicas × DATABASE_MAX_OPEN_CONNS` below the Cloud SQL connection limit
+  (100 on the current tier).
+- **Shutdown**: each pod waits 60 s (`preStop`) before stopping so in-flight
+  streaming requests can finish; a rollout therefore takes a few minutes.
+- **RBAC change**: after editing `k8s/bootstrap`, re-run `./bootstrap.sh k8s`.
 - **Upstream egress IP** (for allow-lists at providers):
   `gcloud compute addresses describe lkv-nat-ip --region us-east1 --format='value(address)'`.
 

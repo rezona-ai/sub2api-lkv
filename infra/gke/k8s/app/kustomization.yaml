@@ -7,6 +7,7 @@ namespace: ns-sub2api
 resources:
   - configmap.yaml
   - deployment.yaml
+  - autoscaling.yaml
   - service.yaml
   - gateway.yaml
 labels:
